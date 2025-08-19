@@ -1,105 +1,167 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+import os
 import time
 import pyautogui as py
-import pandas as pd
-import os
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import SessionNotCreatedException, WebDriverException
 
-# Configuração inicial
-driver = webdriver.Chrome()
-wait = WebDriverWait(driver, 20)
 
-# Carregar planilha
-# data = pd.read_excel(r'C:\\Users\\Servidor_Cameras\\Desktop\\Vendas Consorcio Diaria.xlsx')
-data = pd.read_excel(r'C:\\xampp\\htdocs\\embracon\\Vendas Consorcio Diaria.xlsx')
+class Config:
+    """Centraliza as configurações da automação de contratos."""
 
-contratos = data.iloc[:, 5].dropna().astype(str).str.replace("\.0$", "", regex=True)  # Removendo ".0" do final
+    DOWNLOAD_DIR = r"C:\\xampp\\htdocs\\embracon\\Contrato"
+    USERNAME = "usecred.eireli@embracon.com.br"
+    PASSWORD = "Us3Cr3d3@2036"
+    LOGIN_URL = "https://parceirosweb.embraconnet.com.br/Newcon_Intranet/frmCorCCCnsLogin.aspx"
+    URL_CONTRATO = (
+        "https://parceirosweb.embraconnet.com.br/Newcon_Intranet/CONPV/frmConPvRelContrato.aspx?applicationKey="
+        "1NmFNusRtxJxFVv3u8rP20QkKmoNa1QEYnUNwJ66m7o="
+    )
+    MAX_WAIT = 30
+    SCREEN_WIDTH = 1920
+    SCREEN_HEIGHT = 1080
 
-# Abrir página de login
-driver.get("https://parceirosweb.embraconnet.com.br/Newcon_Intranet/frmCorCCCnsLogin.aspx")
-time.sleep(5)
 
-# Fazer login
-wait.until(EC.presence_of_element_located((By.ID, "i0116"))).send_keys("usecred.eireli@embracon.com.br")
-driver.find_element(By.ID, "idSIButton9").click()
-time.sleep(5)
-driver.find_element(By.ID, "passwordInput").send_keys("Us3Cr3d3@2036")
-driver.find_element(By.ID, "submitButton").click()
-time.sleep(10)
-driver.find_element(By.ID, "idBtn_Back").click()
-time.sleep(5)
+def init_browser():
+    """Configura e inicia o navegador Chrome."""
 
-# garante que a pasta existe
-os.makedirs(r"C:\xampp\htdocs\embracon\Boleto", exist_ok=True)
+    options = webdriver.ChromeOptions()
+    options.add_argument('--disable-infobars')
+    options.add_argument('--disable-extensions')
+    options.add_argument('--log-level=3')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument(f'--window-size={Config.SCREEN_WIDTH},{Config.SCREEN_HEIGHT}')
+    options.add_experimental_option('excludeSwitches', ['enable-automation'])
+    options.add_experimental_option('useAutomationExtension', False)
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_experimental_option(
+        "prefs",
+        {
+            "download.default_directory": Config.DOWNLOAD_DIR,
+            "download.prompt_for_download": False,
+            "safebrowsing.enabled": True,
+        },
+    )
 
-def emitir_boletos(contratos):
-    # Navegar até a emissão de cobrança
-    wait.until(EC.element_to_be_clickable((By.ID, "rptUnidadeNegocio_ctl03_txt_CD_Unidade_Negocio"))).click()
-    time.sleep(5)
-    driver.find_element(By.ID, "ctl00_Conteudo_tvwEmpresat4").click()
-    time.sleep(5)
-    driver.get("https://parceirosweb.embraconnet.com.br/Newcon_Intranet/CONPV/frmConPvRelContrato.aspx?applicationKey=1NmFNusRtxJxFVv3u8rP20QkKmoNa1QEYnUNwJ66m7o=")
+    service = Service(executable_path='chromedriver.exe')
 
-    driver.find_element(By.ID, "ctl00_Conteudo_rblTipoPesquisa_1").send_keys("Número Contrato")
-    time.sleep(3)
+    try:
+        driver = webdriver.Chrome(service=service, options=options)
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        wait = WebDriverWait(driver, Config.MAX_WAIT)
+        return driver, wait
+    except SessionNotCreatedException as e:
+        print(f"Erro de versão do ChromeDriver: {e}")
+        raise
+    except WebDriverException as e:
+        print(f"Erro ao iniciar navegador: {e}")
+        raise
 
-    for contrato in contratos:
-        try:
-            search_box = driver.find_element(By.ID, "ctl00_Conteudo_edtNO_Contrato")
-            time.sleep(1)
-            search_box.clear()
-            search_box.send_keys(str(contrato))
-            time.sleep(1)
 
-            driver.find_element(By.ID, "ctl00_Conteudo_cbxTipoDocumento").click()
-            time.sleep(2)
-            driver.find_element(By.ID, "ctl00_Conteudo_btnLocalizar").click()
-            time.sleep(3)
+class EmbraconAutomation:
+    """Gerencia o fluxo de automação do contrato."""
 
-            # Se não encontrou, a página geralmente mostra um label de erro
-            if "ctl00_Conteudo_lblErro" in driver.page_source:
-                print(f"Contrato {contrato} não encontrado, tentando o próximo…")
+    def __init__(self, driver, wait):
+        self.driver = driver
+        self.wait = wait
+
+    def login(self):
+        """Realiza o login na plataforma."""
+
+        self.driver.get(Config.LOGIN_URL)
+        time.sleep(5)
+
+        self.wait.until(EC.presence_of_element_located((By.ID, "i0116"))).send_keys(Config.USERNAME)
+        self.driver.find_element(By.ID, "idSIButton9").click()
+        time.sleep(5)
+
+        self.driver.find_element(By.ID, "passwordInput").send_keys(Config.PASSWORD)
+        self.driver.find_element(By.ID, "submitButton").click()
+        time.sleep(10)
+
+        self.driver.find_element(By.ID, "idBtn_Back").click()
+        time.sleep(5)
+
+    def navigate_to_contract(self):
+        """Navega até a página de emissão de contrato."""
+
+        self.wait.until(
+            EC.element_to_be_clickable((By.ID, "rptUnidadeNegocio_ctl03_txt_CD_Unidade_Negocio"))
+        ).click()
+        time.sleep(5)
+        self.driver.find_element(By.ID, "ctl00_Conteudo_tvwEmpresat4").click()
+        time.sleep(5)
+        self.driver.get(Config.URL_CONTRATO)
+        self.driver.find_element(By.ID, "ctl00_Conteudo_rblTipoPesquisa_1").send_keys("Número Contrato")
+        time.sleep(3)
+
+    def issue_contract(self, contratos):
+        """Emite o PDF do contrato mantendo as etapas originais do robô."""
+
+        for contrato in contratos:
+            try:
+                search_box = self.driver.find_element(By.ID, "ctl00_Conteudo_edtNO_Contrato")
+                time.sleep(1)
+                search_box.clear()
+                search_box.send_keys(str(contrato))
+                time.sleep(1)
+
+                self.driver.find_element(By.ID, "ctl00_Conteudo_cbxTipoDocumento").click()
+                time.sleep(2)
+                self.driver.find_element(By.ID, "ctl00_Conteudo_btnLocalizar").click()
+                time.sleep(3)
+
+                if "ctl00_Conteudo_lblErro" in self.driver.page_source:
+                    print(f"Contrato {contrato} não encontrado, tentando o próximo…")
+                    continue
+
+                self.driver.find_element(By.ID, "ctl00_Conteudo_btnImprimir").click()
+                time.sleep(5)
+
+                py.click(x=675, y=161)  # ajusta o foco/aba do PDF se necessário
+                time.sleep(2)
+
+                py.hotkey("ctrl", "s")
+                time.sleep(2)
+                caminho_pdf = fr"{Config.DOWNLOAD_DIR}\\{contrato}.pdf"
+                py.typewrite(caminho_pdf)
+                time.sleep(1)
+                py.press("enter")
+                time.sleep(2)
+                print(f"Arquivo salvo como {contrato}.pdf")
+                self.wait.until(EC.element_to_be_clickable((By.ID, "download"))).click()
+                time.sleep(5)
+                py.click(x=909, y=629)  # clica em cancelar
+                time.sleep(5)
+                self.driver.find_element(By.ID, "ctl00_Conteudo_rblTipoPesquisa_1").send_keys("Número Contrato")
+                time.sleep(3)
+            except Exception as e:
+                print(f"Erro ao processar contrato {contrato}: {str(e)}")
                 continue
 
-            driver.find_element(By.ID, "ctl00_Conteudo_btnImprimir").click()
-            time.sleep(5)
-            
-            
 
-            # <<< SEU BLOCO DENTRO DO TRY >>>
-            
-            
-            py.click(x=675, y=161)   # ajusta o foco/aba do PDF se necessário
-            time.sleep(2)
+def main(contrato: str) -> str:
+    """Executa a automação para o contrato informado."""
 
-            # Salvar (Ctrl+S) e nomear com o número do contrato
-            py.hotkey("ctrl", "s")
-            time.sleep(2)
-            caminho_pdf = fr"C:\xampp\htdocs\embracon\Contrato\{contrato}.pdf"
-            py.typewrite(caminho_pdf)
-            time.sleep(1)
-            py.press("enter")
-            time.sleep(2)
-            print(f"Arquivo salvo como {contrato}.pdf")
-            wait.until(EC.element_to_be_clickable((By.ID, "download"))).click()
-            time.sleep(5)
-            py.click(x=909, y=629) #clica em cancelar
-            time.sleep(5)
-            driver.find_element(By.ID, "ctl00_Conteudo_rblTipoPesquisa_1").send_keys("Número Contrato")
-            time.sleep(3)
+    os.makedirs(Config.DOWNLOAD_DIR, exist_ok=True)
+    driver, wait = init_browser()
+    automator = EmbraconAutomation(driver, wait)
 
-        except Exception as e:
-            print(f"Erro ao processar contrato {contrato}: {str(e)}")
-            continue  # continua para o próximo contrato mesmo se der erro
+    try:
+        automator.login()
+        automator.navigate_to_contract()
+        automator.issue_contract([contrato])
+    finally:
+        driver.quit()
 
-# Loop pelos contratos (atenção: aqui você estava lendo outra planilha/coluna diferente)
-# Se isso for proposital, ok; se não, use a mesma fonte/coluna que acima
-data = pd.read_excel(r'C:\\Users\\Servidor_Cameras\\Desktop\\Vendas Consorcio Diaria.xlsx')
-contratos = data.iloc[:, 5].dropna().astype(str).str.replace("\.0$", "", regex=True)
+    return os.path.join(Config.DOWNLOAD_DIR, f"{contrato}.pdf")
 
 
-emitir_boletos(contratos)
-driver.quit()
+if __name__ == "__main__":
+    contrato_num = input("Número do contrato: ")
+    main(contrato_num)
+

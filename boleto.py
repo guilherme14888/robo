@@ -4,8 +4,6 @@ import random
 import pyautogui as py
 import socket
 from datetime import datetime
-import smtplib
-from email.message import EmailMessage
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.select import Select 
@@ -14,7 +12,6 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (TimeoutException, NoSuchElementException, WebDriverException, SessionNotCreatedException)
-from smtp_config import SMTPConfig
 
 # ==============================================
 # CONFIGURAÇÕES GERAIS
@@ -502,105 +499,6 @@ class EmbraconAutomation:
                 print(f"⚠️ Erro ao processar contrato {contrato}: {str(e)}")
                 continue
 
-# ==============================================
-# FUNÇÃO DE EMAIL
-# ==============================================
-
-def enviar_email(destinatario: str, caminho_pdf: str, contrato: str) -> None:
-    """Versão ultra robusta com SSL explícito e múltiplos fallbacks"""
-    import ssl
-    from socket import gaierror
-    
-    SMTP_CONFIGS = [
-        # Tentativa principal com SSL
-        {
-            'server': 'email-ssl.com.br',
-            'port': 465,
-            'use_ssl': True,
-            'timeout': 45
-        },
-        # Fallback 1 - Tentativa alternativa
-        {
-            'server': 'email-ssl.com.br',
-            'port': 587,
-            'use_ssl': False,
-            'timeout': 45
-        },
-        # Fallback 2 - Servidor secundário (se houver)
-        {
-            'server': 'smtp2.email-ssl.com.br',
-            'port': 465,
-            'use_ssl': True,
-            'timeout': 45
-        }
-    ]
-
-    for config in SMTP_CONFIGS:
-        try:
-            print(f"\n🔗 Tentando conexão com {config['server']}:{config['port']} (SSL: {config['use_ssl']})")
-            
-            # Cria contexto SSL seguro
-            context = ssl.create_default_context()
-            
-            if config['use_ssl']:
-                # Conexão SSL direta
-                with smtplib.SMTP_SSL(
-                    host=config['server'],
-                    port=config['port'],
-                    timeout=config['timeout'],
-                    context=context
-                ) as smtp:
-                    _realizar_envio(smtp, destinatario, caminho_pdf, contrato)
-                    return
-            else:
-                # Conexão STARTTLS
-                with smtplib.SMTP(
-                    host=config['server'],
-                    port=config['port'],
-                    timeout=config['timeout']
-                ) as smtp:
-                    smtp.ehlo()
-                    smtp.starttls(context=context)
-                    smtp.ehlo()
-                    _realizar_envio(smtp, destinatario, caminho_pdf, contrato)
-                    return
-                    
-        except (smtplib.SMTPException, gaierror, ssl.SSLError, TimeoutError) as e:
-            print(f"⚠️ Falha na conexão {config['server']}: {type(e).__name__} - {str(e)}")
-            continue
-    
-    print("🚫 Todas as tentativas de conexão falharam")
-
-def _realizar_envio(smtp, destinatario, caminho_pdf, contrato):
-    """Realiza o envio após conexão estabelecida"""
-    try:
-        print("🔑 Autenticando...")
-        smtp.login(SMTPConfig.USERNAME, SMTPConfig.PASSWORD)
-        
-        print("📝 Preparando mensagem...")
-        msg = EmailMessage()
-        msg['From'] = SMTPConfig.USERNAME
-        msg['To'] = destinatario
-        msg['Subject'] = f'Boleto {contrato}'
-        msg.set_content(f"Segue boleto do contrato {contrato}")
-        
-        with open(caminho_pdf, 'rb') as f:
-            msg.add_attachment(
-                f.read(),
-                maintype='application',
-                subtype='pdf',
-                filename=f"Boleto_{contrato}.pdf"
-            )
-        
-        print("✉️ Enviando email...")
-        smtp.send_message(msg)
-        print(f"✅ Email enviado com sucesso para {destinatario}")
-        
-    except smtplib.SMTPAuthenticationError:
-        print("🔒 Erro de autenticação - verifique usuário e senha")
-    except Exception as e:
-        print(f"⚠️ Erro durante envio: {type(e).__name__} - {str(e)}")
-        
 def _return_to_home(self):
         """Retorna para a tela inicial após emitir um boleto"""
         print("🏠 Voltando para tela inicial...")
@@ -619,8 +517,8 @@ def _return_to_home(self):
 # EXECUÇÃO PRINCIPAL
 # ==============================================
 
-def main(contrato: str, email_destino: str) -> str:
-    """Emite o boleto para o contrato informado e envia por email."""
+def main(contrato: str) -> str:
+    """Emite o boleto para o contrato informado."""
     print("="*50)
     print("INICIANDO AUTOMAÇÃO EMBRACON - EMISSÃO DE BOLETOS")
     print("="*50)
@@ -655,11 +553,6 @@ def main(contrato: str, email_destino: str) -> str:
         print("O navegador permanecerá aberto para verificação.")
 
     pdf_path = pdf_path or os.path.join(Config.CONTRATOS_DIR, f"{contrato}.pdf")
-    try:
-        enviar_email(email_destino, pdf_path, contrato)
-        print(f"📧 Email enviado para {email_destino}")
-    except Exception as e:
-        print(f"⚠️ Falha ao enviar email: {e}")
     return pdf_path
 
 
@@ -667,5 +560,4 @@ if __name__ == "__main__":
     py.PAUSE = 0.1
     py.FAILSAFE = True
     contrato = input("Número do contrato: ")
-    email = input("E-mail para envio: ")
-    main(contrato, email)
+    main(contrato)
