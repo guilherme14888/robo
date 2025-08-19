@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Robô {{ robot_type }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        form {
+            display: inline-block;
+            margin-top: 20px;
+        }
+        input[type="text"] {
+            padding: 10px;
+            font-size: 16px;
+            width: 300px;
+            margin-right: 10px;
+        }
+        input[type="submit"] {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+        .back-btn {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 8px 15px;
+            background-color: #f44336;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        .back-btn:hover {
+            background-color: #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <h1>Robô {{ robot_type }}</h1>
+    <p>Insira o número do contrato abaixo:</p>
+    
+    <form action="{{ url_for('submit_contract') }}" method="post">
+        <input type="hidden" name="robot_type" value="{{ robot_type }}">
+        <input type="text" name="contract_number" placeholder="Número do Contrato" required>
+        <input type="submit" value="Enviar">
+    </form>
+    
+    <br>
+    <a href="{{ url_for('index') }}" class="back-btn">Voltar</a>
+</body>
+</html>
