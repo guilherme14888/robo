@@ -104,10 +104,16 @@ class EmbraconAutomation:
 
         for contrato in contratos:
             try:
-                search_box = self.driver.find_element(By.ID, "ctl00_Conteudo_edtNO_Contrato")
-                time.sleep(1)
+                numero = str(contrato).strip()
+                if not numero:
+                    continue
+
+                search_box = self.wait.until(
+                    EC.element_to_be_clickable((By.ID, "ctl00_Conteudo_edtNO_Contrato"))
+                )
+                search_box.click()
                 search_box.clear()
-                search_box.send_keys(str(contrato))
+                search_box.send_keys(numero)
                 time.sleep(1)
 
                 self.driver.find_element(By.ID, "ctl00_Conteudo_cbxTipoDocumento").click()
@@ -127,12 +133,12 @@ class EmbraconAutomation:
 
                 py.hotkey("ctrl", "s")
                 time.sleep(2)
-                caminho_pdf = fr"{Config.DOWNLOAD_DIR}\\{contrato}.pdf"
+                caminho_pdf = fr"{Config.DOWNLOAD_DIR}\\{numero}.pdf"
                 py.typewrite(caminho_pdf)
                 time.sleep(1)
                 py.press("enter")
                 time.sleep(2)
-                print(f"Arquivo salvo como {contrato}.pdf")
+                print(f"Arquivo salvo como {numero}.pdf")
                 self.wait.until(EC.element_to_be_clickable((By.ID, "download"))).click()
                 time.sleep(5)
                 py.click(x=909, y=629)  # clica em cancelar
@@ -140,7 +146,7 @@ class EmbraconAutomation:
                 self.driver.find_element(By.ID, "ctl00_Conteudo_rblTipoPesquisa_1").send_keys("Número Contrato")
                 time.sleep(3)
             except Exception as e:
-                print(f"Erro ao processar contrato {contrato}: {str(e)}")
+                print(f"Erro ao processar contrato {numero}: {str(e)}")
                 continue
 
 
@@ -151,14 +157,16 @@ def main(contrato: str) -> str:
     driver, wait = init_browser()
     automator = EmbraconAutomation(driver, wait)
 
+    contratos = [c.strip() for c in str(contrato).splitlines() if c.strip()]
+
     try:
         automator.login()
         automator.navigate_to_contract()
-        automator.issue_contract([contrato])
+        automator.issue_contract(contratos)
     finally:
         driver.quit()
 
-    return os.path.join(Config.DOWNLOAD_DIR, f"{contrato}.pdf")
+    return os.path.join(Config.DOWNLOAD_DIR, f"{contratos[0]}.pdf")
 
 
 if __name__ == "__main__":
